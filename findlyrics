@@ -1,0 +1,80 @@
+#!/usr/bin/env python3
+import requests
+from bs4 import BeautifulSoup
+import argparse
+
+# Search for song ID on Genius
+def search_song(song_name, artist_name, access_token):
+    base_url = "https://api.genius.com/search"
+    headers = {"Authorization": f"Bearer {access_token}"}
+    params = {"q": f"{song_name} {artist_name}"}
+
+    response = requests.get(base_url, headers=headers, params=params)
+    data = response.json()
+    
+    hits = data.get('response', {}).get('hits', [])
+    if not hits:
+        return None
+    
+    song_id = hits[0]['result']['id']
+    return song_id
+
+# Get song URL
+def get_song_details(song_id, access_token):
+    base_url = f"https://api.genius.com/songs/{song_id}"
+    headers = {"Authorization": f"Bearer {access_token}"}
+
+    response = requests.get(base_url, headers=headers)
+    data = response.json()
+
+    if 'response' in data:
+        song_url = data['response']['song']['url']
+        return song_url
+    return None
+
+# Scrape song lyrics
+def get_lyrics(song_url):
+    response = requests.get(song_url)
+    soup = BeautifulSoup(response.text, 'html.parser')
+    
+    lyrics_containers = soup.find_all("div", class_="Lyrics-sc-1bcc94c6-1 bzTABU")
+
+    if not lyrics_containers:
+        return "Lyrics not found."
+
+    lyrics = []
+    for container in lyrics_containers:
+        for line in container.stripped_strings:
+            lyrics.append(line)
+
+    return '\n'.join(lyrics)
+
+# Fetch lyrics
+def fetch_song_lyrics(song_name, artist_name, access_token):
+    song_id = search_song(song_name, artist_name, access_token)
+    if not song_id:
+        return "Song not found."
+    
+    song_url = get_song_details(song_id, access_token)
+    if not song_url:
+        return "Could not retrieve song URL."
+    
+    print(f"Song URL: {song_url}")
+    print("Fetching lyrics...")
+    lyrics = get_lyrics(song_url)
+    return lyrics
+
+# CLI Interface
+def main():
+    parser = argparse.ArgumentParser(description="Find song lyrics using Genius API.")
+    parser.add_argument("song_name", type=str, help="Name of the song")
+    parser.add_argument("artist_name", type=str, help="Name of the artist")
+    args = parser.parse_args()
+
+    access_token = "API_HERE"  # Replace with your actual Genius API token
+    lyrics = fetch_song_lyrics(args.song_name, args.artist_name, access_token)
+    print("\n--- Lyrics ---\n")
+    print(lyrics)
+
+if __name__ == "__main__":
+    main()
